@@ -109,7 +109,7 @@
 
     
     - ID_Runs=      InitRun(Runs,     1000000, PRI_USER1);        // Show Taskswitch calls every second
-    Shows system-information every second:
+    Shows system-information every second:  (see Output.jpg)
      1)      2)  3) 4) 5)     6)
     438099 25980 53 52 103200 1
         1) number of RUNNER calls per second.    The average is one call every 2.3 µs !!!!!
