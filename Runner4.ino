@@ -1,13 +1,15 @@
+#define _ESP32
+//#define _ARDUINO
+
 
 /*
-
   Runner
 
   (C) 2019 Dipl. Phys. Helmut Weber
 
   smallest (and fastest?) Cooperative Multitasking ever
 
-  ESP32-Version
+  ESP32-Version, Arduino-Version
 
 
   Is it possible to use a cooperative OS as an RTOS ?
@@ -147,9 +149,10 @@
     Arduino, ESP32 to supercomputers can be used as an RTOS. 
 
 */
-
+#ifdef _ESP32
 #include <driver/dac.h>
 #include <math.h>
+#endif
 
 
 
@@ -266,8 +269,9 @@ int nextJob;
     return;
   }
 
-  // to test longest time between 2 RUNNER calls
+ 
   mics=micros();
+  // to test longest time between 2 RUNNER calls   Arduino: 156 µs, ESP32: 20µs
   //  if ((mics-LastMics) > MaxMics) {
   //    MaxMics=mics-LastMics;
   //  }
@@ -347,8 +351,11 @@ void SerPrint(char *pt) {                           // print a string to buffer
 
 Task SerOut() {                                     // Max 1000 characters/s with interval 1000
   if (SerHead != SerTail) {
+#ifdef _ARDUINO
+    UDR0=SerString[SerTail++];                    // Arduino: no test of free buffer neccessary
+#else    
     Serial.write(SerString[SerTail++]);             // ESP32
-    //UDR0=SerString[SerTail++];                    // Arduino: no test of free buffer neccessary
+#endif
     if(SerTail==SERMAX) SerTail=0;
   }
 }
@@ -357,12 +364,23 @@ Task SerOut() {                                     // Max 1000 characters/s wit
 Task Blink() {
 static uint8_t On;
 static int cnt;
+  
   if(On) {
+#ifdef _ARDUINO
+    PORTB |= B00100000;
+#else
     digitalWrite(13,1);
+#endif
     On=0;
   }
+  
   else {
+#ifdef _ARDUINO
+    PORTB &= ~B00100000;
+#else
     digitalWrite(13,0);
+#endif
+  
     On=1;
   }
 
@@ -383,7 +401,7 @@ Task Count() {
 char bf[20];
 static unsigned int Cnt;
     SerPrint(itoa(Cnt++,bf, 10));
-//    Delay(100,PRI_EVENT);
+//    Delay(100,PRI_EVENT);                         // show longest interval between RUNNER-calls
 //    SerPrint(" ");
 //    Delay(100,PRI_EVENT);
 //    SerPrint(ltoa(MaxMics,bf, 10));
@@ -404,20 +422,26 @@ static long m, last;
   if(last==0) last=m;
   if((m-last) > longest) longest = m-last; 
   last=m;
-  
-  // to mark the running of this task
-  // digitalWrite(12,1);
-  // digitalWrite(12,0);
 
+#ifdef _ARDUINO  
+  // to mark the running of this task 
+  //digitalWrite(12,1);
+  //digitalWrite(12,0);
+  PORTB |= B00010000;
+  PORTB &= ~B00010000;
   
+#endif
+
+#ifdef _ESP32
   // DAC: output sawtooth
   dac_output_voltage((dac_channel_t)1, (uint8_t)(FastCnt&0xff));
 
   // to show start and end of counting 0-127, 127-255
   digitalWrite(12,(FastCnt&0x80));
-  
+
   // to measure resolution: 38 µs
   //dac_output_voltage((dac_channel_t)1, (uint8_t)((FastCnt&0xff)<<7));
+#endif
 
   FastCnt++;
 }
@@ -433,11 +457,17 @@ static long m, last;
   if(last==0) last=m;
   if((m-last) > longest2) longest2 = m-last; 
   last=m;
-  
-  //digitalWrite(14,1);
-  //digitalWrite(14,0);
-                                                      // DAC: output sine
+
+#ifdef _ARDUINO
+  digitalWrite(14,1);
+  digitalWrite(14,0);
+#endif
+
+
+#ifdef _ESP32
+// DAC: output sine
   dac_output_voltage((dac_channel_t)2, (uint8_t)sine[(unsigned int)(FastCnt2&0xff)]);
+#endif
 
   FastCnt2++;
 }
@@ -481,11 +511,11 @@ unsigned long l;
   l=micros();
   SerPrint("\nWaitEvent ");
   Delay(100,PRI_EVENT);
-  SerPrint(ltoa(l-EventStart,bf,10));     // 2-3 µs
+  SerPrint(ltoa(l-EventStart,bf,10));     // ESP32: 2-3 µs, Arduino: 36-68 µs
   Delay(100,PRI_EVENT);
   SerPrint(" us\n");
   Delay(100,PRI_EVENT);
-  priorities[ID_WaitEvent] |= WAITEVENT;            // gives RUNNING and WAITEVENT, reset by Blink,
+  priorities[ID_WaitEvent] |= WAITEVENT;  // gives RUNNING + WAITEVENT, reset by Blink,
 }
 
 
@@ -613,9 +643,15 @@ int mymain(void) {
     Serial.println("Intro to RUNNER multitasking      (C) 2015 H. Weber\n");       // Green text   
     Lottery();                                                  // Draw the winning numbers
    
-    
+#ifdef _ESP32
     ID_Fast=      InitRun(Fast,     50-13,   PRI_KERNEL);       // Send 2. DAC value every 38µs (max.: 53µs)
     ID_Fast2=     InitRun(Fast2,    50-14,   PRI_KERNEL);       // Send DAC value every 38µs (max.: 53µs)
+#endif
+#ifdef _ARDUINO
+    ID_Fast=      InitRun(Fast,     500-150,  PRI_KERNEL);       // Send 2. DAC value every 38µs (max.: 53µs) (ESp32)
+    ID_Fast2=     InitRun(Fast2,    500-170,  PRI_KERNEL);       // Send DAC value every 38µs (max.: 53µs) (ESP32)
+#endif
+
         
     ID_Blink=     InitRun(Blink,    100000,  PRI_USER1);        // Toggle "LED" every 100 ms
     ID_Count=     InitRun(Count,    1000000, PRI_USER1);        // Count and print every second
@@ -639,16 +675,22 @@ void setup() {
   pinMode(11,OUTPUT);
   pinMode(14,OUTPUT);
 
+#ifdef _ESP32
   dac_output_enable((dac_channel_t) 1);
+#endif
 
   for (int i=0;i<256;i++) {
     sine[i]= (int)(128.0 + ( 127.0*sin((float)i/255.0*6.28) ));
     //Serial.println(sine[i]);
   }
+  
+#ifdef _ESP32
   dac_output_enable((dac_channel_t) 2);
+#endif
   
   mymain();                                       // init and run tasks
 }
+
 
 
 
