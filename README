@@ -9,8 +9,9 @@
 
   
 
-  Runner2.c   = Linux-Version     (12.000.000 taskswitches/s)
-  Runner4.ino = ESP32-Version     (403.000    taskswitches/s)
+  Runner2.c   = Linux-Version     (12.000.000    taskswitches/s) Lenovo W520
+  Runner4.ino = ESP32-Version     (   403.000    taskswitches/s)
+  Runner4.ino = ARDUINO-Version   (    32.000    taskswitches/s)
 
 
   Is it possible to use a cooperative OS as an RTOS ?
